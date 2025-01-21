@@ -1,0 +1,56 @@
+
+--For Onwerbus list---
+select count(*) over() as total_count,b.bus_no, rsc.arrival_time as scheduledarrivaltime, 
+b.gateentrytime as actualarrivaltime, rsc.departure_time as scheduleddeparturetime,b.gateexittime as actualdeparturetime, 
+rsc.origin_place, rsc.destination_place,zm.zone_name, cast(b.baynumber as char) as bay_no from busdetails.bus_master bm inner join "admin".user_master um  on 
+bm.mobile_no = um.contact_no inner join busdetails.route_scheduling_copy rsc on bm.id = rsc.bus_serial_no 
+inner join "transaction".busallocation b on b.routeid = rsc.id inner join mdm.zone_master zm on zm.id = b.zoneid;
+
+--FETCH TARIFF PAYMENT
+
+SELECT count(*) over() AS total_count, bm.bus_no,rs.origin_place, rs.destination_place,
+rs.arrival_time, rs.departure_time,rs.departure_time - rs.arrival_time AS stay_time, bs.gateexittime - bs.gateentrytime AS delay_time,bs.thresholdtime,bs.gateentrytime,
+bs.gateexittime,bs.baynumber, bs.thresholdtime,rs.trip_serial_no ,zm.zone_no from transaction.busallocation bs INNER JOIN
+busdetails.route_scheduling rs ON bs.routeid = rs.id INNER join busdetails.bus_master bm ON rs.bus_serial_no = bm.id
+INNER join mdm.zone_master zm ON bs.zoneid = zm.id ORDER BY transactionid desc;
+
+--updated record in bus_master table
+update busdetails.bus_master 
+set email_id ='debasish@gmail.com', mobile_no = '8114913277', owner_name ='Debasish Mallick'
+where tag_id in ('SA/isbt/352','SA/isbt/1054','SA/isbt/772','SA/isbt/543','SA/isbt/490','SA/isbt/341','SA/isbt/1161') 
+
+OR Using Subquery
+update busdetails.bus_master 
+set email_id =(select email_id from "admin".user_master where id = 88),
+mobile_no =(select mobile_no from "admin".user_master where id = 88),
+owner_name = (select owner_name from "admin".user_master where id = 88)
+where tag_id IN(select distinct taguuid from "transaction".busallocation) 
+
+
+-----update record column (updateddt) with time format(yyyy-mm-dd)---- 
+update "transaction".busallocation 
+set updatedby ='sysadmin', updateddt =SELECT TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH:MI:SS')
+where taguuid = 'SA/isbt/352'
+
+---fetch unique count of device type from device_master table----
+select count(distinct type)from mdm.device_master dm ;
+
+---inserted record into transactionlogs with currenttime timestamp
+insert into "transaction".transactionlogs(taguuid, datetime)
+select taguuid, now()from "transaction".busallocation ;
+
+--fetched and checkedif the gateentrytime - arrival time is greater than thresholdtime by selecting from thresholdtime table 
+
+select bus_no, taguuid, case 
+when (gateentrytime -arrivaltime)::time > (select duration from "transaction".thresholdtime where description= 'DelayThreshold') 
+then 'delay'
+when (gateentrytime -arrivaltime)::time < (select duration from "transaction".thresholdtime where description = 'EarlyThreshold') 
+then 'early'
+end checkstatus
+from "transaction".busallocation 
+
+--fetch unique record in route_scheduling_copy table or not 
+select distinct bus_serial_no, trip_serial_no  from busdetails.route_scheduling_copy 
+group by bus_serial_no, trip_serial_no  
+order by trip_serial_no desc 
+
